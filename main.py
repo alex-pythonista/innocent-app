@@ -1,42 +1,36 @@
-from fastapi import FastAPI
-from enum import Enum
+from typing import Annotated
 
-class ModelName(Enum):
-    alexnet = "alexnet"
-    resnet = "resnet"
-    lenet = "lenet"
+from fastapi import Depends, FastAPI
+from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel
 
+
+class User(BaseModel):
+    username: str
+    email: str | None = None
+    full_name: str | None = None
+    disabled: bool | None = None
 
 app = FastAPI()
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-@app.get('/health')
-async def health_status():
-    return {
-        'message': '200 OK',
-    }
 
-@app.get('/models/{model_name}')
-async def select_model(model_name: ModelName):
-    data = {
-        'model_name': ModelName.lenet,
-        'message': "LeCNN all the images",
-    }
-    if model_name is ModelName.alexnet:
-        data['message'] = "Deep Learning FTW!"
-        data['model_name'] = model_name
-        return data
-    elif model_name is ModelName.resnet:
-        data['message'] = "Have some residuals"
-        data['model_name'] = model_name
-        return data
-    return 
+@app.get("/items/")
+async def read_items(token: Annotated[str, Depends(oauth2_scheme)]):
+    return {"token": token}
 
-@app.get('/items/{item_id}')
-async def root(item_id: int):
-    return {
-        'message': {
-            'hello': 'world',
-            'item_id': item_id,
-        },
-    }
+async def fake_decode_token(token):
+    return User(
+        username=token + 'fakedecoded',
+        email='john@example.com',
+        full_name='John Doe',
+    )
+
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+    user = fake_decode_token(token)
+    return user
+
+@app.get('/users/me')
+async def read_users_me(current_user: Annotated[User, Depends(get_current_user)]):
+    return current_user
